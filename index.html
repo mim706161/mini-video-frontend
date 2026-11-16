@@ -200,6 +200,22 @@
             }
 
             renderFeed(allVideos);
+            
+            // Handle startapp deep link if redirected from shared link
+            const startParam = tg?.initDataUnsafe?.start_param;
+            if (startParam && startParam.startsWith('video_')) {
+                try {
+                    const targetVideoId = startParam.replace('video_', '');
+                    setTimeout(() => {
+                        const targetCard = document.querySelector(`.video-card[data-id="${targetVideoId}"]`);
+                        if (targetCard) {
+                            targetCard.scrollIntoView({ behavior: 'smooth' });
+                        }
+                    }, 500);
+                } catch (e) {
+                    console.log(e);
+                }
+            }
         }
 
         function renderFeed(videos) {
@@ -236,7 +252,7 @@
                                 <span class="count-text" style="color: #fff; font-size: 10px;">Hot Offer</span>
                             </a>
 
-                            <button class="action-btn" onclick="shareVideo('${v.video_url}')">
+                            <button class="action-btn" onclick="shareVideo('${v.id}')">
                                 <span style="font-size: 20px;">↗️</span>
                                 <span class="count-text">Share</span>
                             </button>
@@ -405,9 +421,12 @@
             }
         }
 
-        function shareVideo(videoUrl) {
+        function shareVideo(videoId) {
+            const botUsername = "Videohub7bot"; 
+            
+            const miniAppShareUrl = `https://t.me/${botUsername}/app?startapp=video_${videoId}`;
             const text = "Check out this amazing video on Mini Video!";
-            const telegramShareUrl = `https://t.me/share/url?url=${encodeURIComponent(videoUrl)}&text=${encodeURIComponent(text)}`;
+            const telegramShareUrl = `https://t.me/share/url?url=${encodeURIComponent(miniAppShareUrl)}&text=${encodeURIComponent(text)}`;
 
             if (window.Telegram?.WebApp && window.Telegram.WebApp.openTelegramLink) {
                 window.Telegram.WebApp.openTelegramLink(telegramShareUrl);
