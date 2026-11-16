@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="bn">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -71,7 +71,7 @@
 
     <!-- Main Video Feed -->
     <div id="feed-view">
-        <div class="loader">ভিডিও লোড হচ্ছে...</div>
+        <div class="loader">Loading videos...</div>
     </div>
 
     <!-- User / My Profile View -->
@@ -80,15 +80,15 @@
     <!-- Upload Modal -->
     <div id="upload-modal">
         <div class="modal-content">
-            <h3>নতুন ভিডিও আপলোড</h3>
+            <h3>Upload New Video</h3>
             <label class="file-box" id="file-label">
-                📁 ভিডিও বাছাই করুন (সর্বোচ্চ ২৫ MB)
+                📁 Select Video (Max 25 MB)
                 <input type="file" id="video-input" accept="video/mp4,video/webm,video/quicktime" hidden>
             </label>
-            <textarea id="caption-input" placeholder="ক্যাপশন লিখুন..."></textarea>
+            <textarea id="caption-input" placeholder="Write a caption..."></textarea>
             <div class="modal-btns">
-                <button class="btn btn-cancel" onclick="closeUploadModal()">বাতিল</button>
-                <button class="btn btn-post" id="post-btn" onclick="uploadVideo()">পোস্ট করুন</button>
+                <button class="btn btn-cancel" onclick="closeUploadModal()">Cancel</button>
+                <button class="btn btn-post" id="post-btn" onclick="uploadVideo()">Post</button>
             </div>
         </div>
     </div>
@@ -105,7 +105,7 @@
         const SUPABASE_ANON_KEY = 'sb_publishable_lZdvaKrvEi-7hzixWrOCzA_FoJxJ56b';
         const BACKEND_UPLOAD_URL = 'https://video-backend-7mbc.onrender.com/upload';
         
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         const tg = window.Telegram?.WebApp;
         if (tg) {
@@ -115,7 +115,7 @@
 
         const tgUser = tg?.initDataUnsafe?.user || {
             id: 'guest_' + (localStorage.getItem('guest_id') || Math.floor(Math.random() * 100000)),
-            first_name: 'গেস্ট ইউজার',
+            first_name: 'Guest User',
             username: 'guest'
         };
         if (!tg?.initDataUnsafe?.user) localStorage.setItem('guest_id', tgUser.id.replace('guest_', ''));
@@ -128,7 +128,7 @@
 
         let allVideos = [];
         let userLikedVideoIds = new Set();
-        let viewedSessionSet = new Set(); // সেশনে একবার ভিউ কাউন্ট করার জন্য
+        let viewedSessionSet = new Set();
         let scrollCount = 0;
 
         async function initApp() {
@@ -137,22 +137,22 @@
         }
 
         async function fetchUserLikes() {
-            const { data } = await supabase.from('likes').select('video_id').eq('user_id', currentUser.id);
+            const { data } = await sbClient.from('likes').select('video_id').eq('user_id', currentUser.id);
             if (data) userLikedVideoIds = new Set(data.map(item => item.video_id));
         }
 
         async function loadVideos() {
             const feedEl = document.getElementById('feed-view');
-            const { data, error } = await supabase.from('videos').select('*').order('created_at', { ascending: false });
+            const { data, error } = await sbClient.from('videos').select('*').order('created_at', { ascending: false });
             
             if (error) {
-                feedEl.innerHTML = `<div class="loader">ডাটাবেজ কানেক্ট হয়নি! টেবিল বা কি (Key) চেক করুন।</div>`;
+                feedEl.innerHTML = `<div class="loader">Database connection error! Check tables or keys.</div>`;
                 return;
             }
 
-        allVideos = data || [];
+            allVideos = data || [];
             if (allVideos.length === 0) {
-                feedEl.innerHTML = `<div class="loader">এখনো কোনো ভিডিও নেই। নিচের + বাটনে ক্লিক করে ভিডিও আপলোড করুন!</div>`;
+                feedEl.innerHTML = `<div class="loader">No videos yet. Click the + button below to upload!</div>`;
                 return;
             }
 
@@ -189,7 +189,7 @@
 
                             <button class="action-btn" onclick="reportVideo('${v.id}')">
                                 <span style="font-size: 20px;">⚠️</span>
-                                <span class="count-text">রিপোর্ট</span>
+                                <span class="count-text">Report</span>
                             </button>
                         </div>
                     </div>
@@ -209,7 +209,6 @@
                     if (entry.isIntersecting) {
                         video.play().catch(() => {});
                         
-                        // ভিডিও স্ক্রিনে আসলে ভিউ কাউন্ট ১ বাড়িয়ে ডাটাবেজে আপডেট করবে
                         if (videoId && !viewedSessionSet.has(videoId)) {
                             viewedSessionSet.add(videoId);
                             incrementVideoView(videoId);
@@ -234,9 +233,7 @@
             if (!video) return;
             
             video.views_count = (video.views_count || 0) + 1;
-            
-            // Supabase ডাটাবেজে ভিউ কাউন্ট আপডেট করা
-            await supabase.from('videos').update({ views_count: video.views_count }).eq('id', videoId);
+            await sbClient.from('videos').update({ views_count: video.views_count }).eq('id', videoId);
         }
 
         function togglePlay(video) {
@@ -271,16 +268,16 @@
                 heartEl?.classList.remove('liked');
                 if (countEl) countEl.innerText = video.likes_count;
 
-                await supabase.from('likes').delete().match({ video_id: videoId, user_id: currentUser.id });
-                await supabase.from('videos').update({ likes_count: video.likes_count }).eq('id', videoId);
+                await sbClient.from('likes').delete().match({ video_id: videoId, user_id: currentUser.id });
+                await sbClient.from('videos').update({ likes_count: video.likes_count }).eq('id', videoId);
             } else {
                 userLikedVideoIds.add(videoId);
                 video.likes_count = (video.likes_count || 0) + 1;
                 heartEl?.classList.add('liked');
                 if (countEl) countEl.innerText = video.likes_count;
 
-                await supabase.from('likes').insert({ video_id: videoId, user_id: currentUser.id });
-                await supabase.from('videos').update({ likes_count: video.likes_count }).eq('id', videoId);
+                await sbClient.from('likes').insert({ video_id: videoId, user_id: currentUser.id });
+                await sbClient.from('videos').update({ likes_count: video.likes_count }).eq('id', videoId);
             }
         }
 
@@ -288,11 +285,11 @@
             const file = e.target.files[0];
             if (file) {
                 if (file.size > 25 * 1024 * 1024) {
-                    alert('ভিডিও সাইজ ২৫ MB-এর কম হতে হবে!');
+                    alert('Video size must be less than 25 MB!');
                     this.value = '';
                     return;
                 }
-                document.getElementById('file-label').innerText = '✅ নির্বাচিত: ' + file.name;
+                document.getElementById('file-label').innerText = '✅ Selected: ' + file.name;
             }
         });
 
@@ -302,10 +299,10 @@
             const postBtn = document.getElementById('post-btn');
             const file = fileInput.files[0];
 
-            if (!file) return alert('দয়া করে একটি ভিডিও বাছাই করুন!');
+            if (!file) return alert('Please select a video!');
 
             postBtn.disabled = true;
-            postBtn.innerText = 'Cloudflare R2-এ আপলোড হচ্ছে...';
+            postBtn.innerText = 'Uploading to Cloudflare R2...';
 
             const formData = new FormData();
             formData.append('video', file);
@@ -318,12 +315,12 @@
                 const result = await response.json();
 
                 if (!result.success) {
-                    throw new Error(result.error || 'আপলোড ব্যর্থ হয়েছে');
+                    throw new Error(result.error || 'Upload failed');
                 }
 
                 const videoUrl = result.videoUrl;
 
-                const { error: dbError } = await supabase.from('videos').insert({
+                const { error: dbError } = await sbClient.from('videos').insert({
                     user_id: currentUser.id,
                     user_name: currentUser.name,
                     username: currentUser.username,
@@ -334,23 +331,23 @@
                 });
 
                 postBtn.disabled = false;
-                postBtn.innerText = 'পোস্ট করুন';
+                postBtn.innerText = 'Post';
 
                 if (dbError) {
-                    alert('ডাটাবেজ সেভ ব্যর্থ: ' + dbError.message);
+                    alert('Database save failed: ' + dbError.message);
                 } else {
                     closeUploadModal();
                     fileInput.value = '';
                     document.getElementById('caption-input').value = '';
-                    document.getElementById('file-label').innerText = '📁 ভিডিও বাছাই করুন (সর্বোচ্চ ২৫ MB)';
+                    document.getElementById('file-label').innerText = '📁 Select Video (Max 25 MB)';
                     await loadVideos();
                     showFeed();
                 }
 
             } catch (err) {
-                alert('ত্রুটি: ' + err.message);
+                alert('Error: ' + err.message);
                 postBtn.disabled = false;
-                postBtn.innerText = 'পোস্ট করুন';
+                postBtn.innerText = 'Post';
             }
         }
 
@@ -372,15 +369,15 @@
             const initial = userName ? userName[0].toUpperCase() : 'U';
 
             profileEl.innerHTML = `
-                ${!isSelf ? `<button class="back-btn" onclick="showFeed()">← ফিডে ফিরে যান</button>` : ''}
+                ${!isSelf ? `<button class="back-btn" onclick="showFeed()">← Back to Feed</button>` : ''}
                 <div class="profile-header">
                     <div class="profile-avatar">${initial}</div>
                     <h2>${escapeHtml(userName)}</h2>
                     <p style="color:#888; font-size:14px;">@${escapeHtml(username || 'user')}</p>
                     <div class="profile-stats">
-                        <div class="stat-box"><span>${userVideos.length}</span><small>ভিডিও</small></div>
-                        <div class="stat-box"><span>${totalLikes}</span><small>মোট লাইক</small></div>
-                        <div class="stat-box"><span>${totalViews}</span><small>মোট ভিউ</small></div>
+                        <div class="stat-box"><span>${userVideos.length}</span><small>Videos</small></div>
+                        <div class="stat-box"><span>${totalLikes}</span><small>Total Likes</small></div>
+                        <div class="stat-box"><span>${totalViews}</span><small>Total Views</small></div>
                     </div>
                 </div>
                 <div class="video-grid">
@@ -388,9 +385,9 @@
                         <div class="grid-item">
                             <video src="${v.video_url}" muted onclick="playSingleFromProfile('${v.id}')"></video>
                             <div class="grid-stats"><span>👁️ ${v.views_count || 0}</span><span>♥ ${v.likes_count || 0}</span></div>
-                            ${userId === currentUser.id ? `<button class="delete-btn" onclick="deleteVideo('${v.id}')">মুছুন</button>` : ''}
+                            ${userId === currentUser.id ? `<button class="delete-btn" onclick="deleteVideo('${v.id}')">Delete</button>` : ''}
                         </div>
-                    `).join('') : '<p style="grid-column: span 3; text-align:center; color:#666; margin-top:30px;">কোনো ভিডিও নেই</p>'}
+                    `).join('') : '<p style="grid-column: span 3; text-align:center; color:#666; margin-top:30px;">No videos available</p>'}
                 </div>
             `;
         }
@@ -405,14 +402,14 @@
         }
 
         async function deleteVideo(videoId) {
-            if (!confirm('আপনি কি নিশ্চিতভাবে ভিডিওটি মুছে ফেলতে চান?')) return;
-            await supabase.from('videos').delete().eq('id', videoId);
+            if (!confirm('Are you sure you want to delete this video?')) return;
+            await sbClient.from('videos').delete().eq('id', videoId);
             await loadVideos();
             openMyProfile();
         }
 
         function reportVideo(videoId) {
-            alert('ধন্যবাদ! ভিডিওটি রিভিউয়ের জন্য রিপোর্ট করা হয়েছে।');
+            alert('Thank you! This video has been reported for review.');
         }
 
         function showFeed() {
