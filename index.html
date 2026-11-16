@@ -107,10 +107,12 @@
     <!-- Upload Modal -->
     <div id="upload-modal">
         <div class="modal-content">
+            <!-- Monetization Promo Banner -->
             <div style="background: linear-gradient(135deg, #ff2b55, #ff7b00); padding: 10px 15px; border-radius: 12px; margin-bottom: 15px; text-align: center; box-shadow: 0 4px 15px rgba(255,43,85,0.3);">
-    <h4 style="font-size: 14px; font-weight: bold; color: #fff; margin-bottom: 2px;">🎁 Monetization & Rewards Program</h4>
-    <p style="font-size: 11px; color: #ffe6e8;">Upload popular videos, gain views, and earn cash soon! Upcoming feature.</p>
-</div>
+                <h4 style="font-size: 14px; font-weight: bold; color: #fff; margin-bottom: 2px;">🎁 Monetization & Rewards Program</h4>
+                <p style="font-size: 11px; color: #ffe6e8;">Upload popular videos, gain views, and earn cash soon! Upcoming feature.</p>
+            </div>
+
             <h3>Upload New Video</h3>
             <label class="file-box" id="file-label" for="video-input">
                 📁 Select Video (Max 25 MB)
@@ -190,7 +192,7 @@
 
         async function loadVideos() {
             const feedEl = document.getElementById('feed-view');
-            // সর্বাধিক ভিউ (views_count) এবং লাইক (likes_count) অনুযায়ী ভিডিওগুলো উপরে নিয়ে আসার লজিক
+            // সর্বাধিক ভিউ ও লাইকপ্রাপ্ত ভিডিওগুলো প্রথমে দেখানোর অর্ডারিং লজিক
             const { data, error } = await sbClient.from('videos').select('*')
                 .order('views_count', { ascending: false })
                 .order('likes_count', { ascending: false })
@@ -235,7 +237,7 @@
                 
                 return `
                 <div class="video-card" data-id="${v.id}" ondblclick="handleDoubleTap(event, '${v.id}')">
-                    <video src="${v.video_url}" loop playsinline preload="auto" onclick="togglePlay(this, '${v.id}')"></video>
+                    <video src="${v.video_url}" loop playsinline preload="metadata" onclick="togglePlay(this, '${v.id}')"></video>
                     <div class="play-pause-indicator" id="indicator-${v.id}">⏸</div>
                     <div class="video-overlay">
                         <div class="user-info">
