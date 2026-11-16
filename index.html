@@ -226,6 +226,11 @@
                                 <span class="count-text" id="like-count-${v.id}">${v.likes_count || 0}</span>
                             </button>
 
+                            <button class="action-btn" onclick="toggleMute('${v.id}')">
+                                <span style="font-size: 22px;" id="mute-icon-${v.id}">🔊</span>
+                                <span class="count-text" id="mute-text-${v.id}">Sound</span>
+                            </button>
+
                             <a href="https://auctionr.org/4/dd298209280bfd2d1700168d31b92186" target="_blank" class="ad-badge-btn">
                                 <span style="font-size: 18px;">🔥</span>
                                 <span class="count-text" style="color: #fff; font-size: 10px;">Hot Offer</span>
@@ -256,8 +261,15 @@
                     if (!video) return;
 
                     if (entry.isIntersecting) {
-                        video.play().catch(() => {});
+                        video.muted = false;
+                        video.play().catch(() => {
+                            video.muted = true;
+                            video.play().catch(() => {});
+                            updateMuteButtonUI(videoId, true);
+                        });
                         
+                        updateMuteButtonUI(videoId, video.muted);
+
                         if (videoId && !viewedSessionSet.has(videoId)) {
                             viewedSessionSet.add(videoId);
                             incrementVideoView(videoId);
@@ -275,6 +287,29 @@
             }, { threshold: 0.7 });
 
             document.querySelectorAll('.video-card').forEach(card => observer.observe(card));
+        }
+
+        function toggleMute(videoId) {
+            const card = document.querySelector(`.video-card[data-id="${videoId}"]`);
+            const video = card ? card.querySelector('video') : null;
+            if (!video) return;
+
+            video.muted = !video.muted;
+            updateMuteButtonUI(videoId, video.muted);
+        }
+
+        function updateMuteButtonUI(videoId, isMuted) {
+            const iconEl = document.getElementById(`mute-icon-${videoId}`);
+            const textEl = document.getElementById(`mute-text-${videoId}`);
+            if (iconEl && textEl) {
+                if (isMuted) {
+                    iconEl.innerText = '🔇';
+                    textEl.innerText = 'Muted';
+                } else {
+                    iconEl.innerText = '🔊';
+                    textEl.innerText = 'Sound';
+                }
+            }
         }
 
         async function incrementVideoView(videoId) {
@@ -295,7 +330,6 @@
                 indicator.innerText = '⏸';
             }
             
-            // Show indicator icon briefly
             indicator.classList.add('show');
             setTimeout(() => {
                 indicator.classList.remove('show');
@@ -372,14 +406,13 @@
         }
 
         function shareVideo(videoUrl) {
-            if (navigator.share) {
-                navigator.share({
-                    title: 'Check out this video!',
-                    url: videoUrl
-                }).catch(() => {});
+            const text = "Check out this amazing video on Mini Video!";
+            const telegramShareUrl = `https://t.me/share/url?url=${encodeURIComponent(videoUrl)}&text=${encodeURIComponent(text)}`;
+
+            if (window.Telegram?.WebApp && window.Telegram.WebApp.openTelegramLink) {
+                window.Telegram.WebApp.openTelegramLink(telegramShareUrl);
             } else {
-                navigator.clipboard.writeText(videoUrl);
-                alert('Video link copied to clipboard!');
+                window.open(telegramShareUrl, '_blank');
             }
         }
 
@@ -555,7 +588,7 @@
         }
 
         async function deleteVideo(videoId) {
-            if (!confirm('Are you sure you want to type delete?')) return; // keeping confirmation clean
+            if (!confirm('Are you sure you want to delete this video?')) return;
             await sbClient.from('videos').delete().eq('id', videoId);
             await loadVideos();
             openMyProfile();
