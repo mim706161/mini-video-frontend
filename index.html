@@ -39,13 +39,13 @@
         #profile-view { display: none; height: calc(100vh - 60px); width: 100%; overflow-y: auto; background: #0f0f0f; padding: 20px; }
         .profile-header { text-align: center; padding: 20px 0; border-bottom: 1px solid #222; }
         .profile-avatar { width: 80px; height: 80px; border-radius: 50%; background: #2b82ff; margin: 0 auto 12px; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: bold; }
-        .profile-stats { display: flex; justify-content: center; gap: 30px; margin-top: 15px; }
-        .stat-box span { display: block; font-size: 18px; font-weight: bold; }
-        .stat-box small { color: #888; font-size: 12px; }
+        .profile-stats { display: flex; justify-content: center; gap: 20px; margin-top: 15px; }
+        .stat-box span { display: block; font-size: 16px; font-weight: bold; }
+        .stat-box small { color: #888; font-size: 11px; }
         .video-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-top: 15px; }
         .grid-item { aspect-ratio: 9/16; background: #222; position: relative; overflow: hidden; border-radius: 4px; cursor: pointer; }
         .grid-item video { width: 100%; height: 100%; object-fit: cover; }
-        .grid-likes { position: absolute; bottom: 5px; left: 5px; font-size: 11px; background: rgba(0,0,0,0.6); padding: 2px 5px; border-radius: 4px; }
+        .grid-stats { position: absolute; bottom: 5px; left: 5px; font-size: 10px; background: rgba(0,0,0,0.6); padding: 2px 5px; border-radius: 4px; display: flex; gap: 6px; }
         .delete-btn { position: absolute; top: 5px; right: 5px; background: rgba(255,0,0,0.8); color: #fff; border: none; border-radius: 4px; padding: 3px 6px; font-size: 11px; cursor: pointer; }
 
         #upload-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; align-items: flex-end; }
@@ -101,9 +101,9 @@
     </div>
 
     <script>
-        const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
-        const BACKEND_UPLOAD_URL = 'https://video-backend-7mbc.onrender.com/upload'; // আপনার রেন্ডার ব্যাকএন্ড লিংক
+        const SUPABASE_URL = 'https://rkkuzkwfderknxpenyni.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_lZdvaKrvEi-7hzixWrOCzA_FoJxJ56b';
+        const BACKEND_UPLOAD_URL = 'https://video-backend-7mbc.onrender.com/upload';
         
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -128,7 +128,8 @@
 
         let allVideos = [];
         let userLikedVideoIds = new Set();
-        let scrollCount = 0; // প্রতি ৩টি ভিডিও পর অ্যাড দেখানোর কাউন্টার
+        let viewedSessionSet = new Set(); // সেশনে একবার ভিউ কাউন্ট করার জন্য
+        let scrollCount = 0;
 
         async function initApp() {
             await fetchUserLikes();
@@ -145,11 +146,11 @@
             const { data, error } = await supabase.from('videos').select('*').order('created_at', { ascending: false });
             
             if (error) {
-                feedEl.innerHTML = `<div class="loader">ডাটাবেজ কানেক্ট হয়নি! Supabase URL ও Key চেক করুন।</div>`;
+                feedEl.innerHTML = `<div class="loader">ডাটাবেজ কানেক্ট হয়নি! টেবিল বা কি (Key) চেক করুন।</div>`;
                 return;
             }
 
-            allVideos = data || [];
+        allVideos = data || [];
             if (allVideos.length === 0) {
                 feedEl.innerHTML = `<div class="loader">এখনো কোনো ভিডিও নেই। নিচের + বাটনে ক্লিক করে ভিডিও আপলোড করুন!</div>`;
                 return;
@@ -165,7 +166,7 @@
                 const initial = v.user_name ? v.user_name[0].toUpperCase() : 'U';
                 
                 return `
-                <div class="video-card" ondblclick="handleDoubleTap(event, '${v.id}')">
+                <div class="video-card" data-id="${v.id}" ondblclick="handleDoubleTap(event, '${v.id}')">
                     <video src="${v.video_url}" loop playsinline onclick="togglePlay(this)"></video>
                     <div class="video-overlay">
                         <div class="user-info">
@@ -176,19 +177,16 @@
                             <div class="caption">${escapeHtml(v.caption || '')}</div>
                         </div>
                         <div class="actions">
-                            <!-- লাইক বাটন -->
                             <button class="action-btn" onclick="toggleLike('${v.id}')">
                                 <span class="heart-icon ${isLiked ? 'liked' : ''}" id="heart-${v.id}">♥</span>
                                 <span class="count-text" id="like-count-${v.id}">${v.likes_count || 0}</span>
                             </button>
 
-                            <!-- 🔞 18+ Exclusive স্মার্ট লিংক বাটন -->
                             <a href="https://auctionr.org/4/dd298209280bfd2d1700168d31b92186" target="_blank" class="action-btn">
                                 <span style="font-size: 22px;">🔞</span>
                                 <span class="count-text" style="color: #ff2b55;">18+ Excl.</span>
                             </a>
 
-                            <!-- রিপোর্ট বাটন -->
                             <button class="action-btn" onclick="reportVideo('${v.id}')">
                                 <span style="font-size: 20px;">⚠️</span>
                                 <span class="count-text">রিপোর্ট</span>
@@ -205,11 +203,18 @@
             const observer = new IntersectionObserver((entries) => {
                 entries.forEach(entry => {
                     const video = entry.target.querySelector('video');
+                    const videoId = entry.target.getAttribute('data-id');
                     if (!video) return;
+
                     if (entry.isIntersecting) {
                         video.play().catch(() => {});
                         
-                        // প্রতি ৩টি ভিডিও স্ক্রোল করার পর Monetag এড দেখাবে
+                        // ভিডিও স্ক্রিনে আসলে ভিউ কাউন্ট ১ বাড়িয়ে ডাটাবেজে আপডেট করবে
+                        if (videoId && !viewedSessionSet.has(videoId)) {
+                            viewedSessionSet.add(videoId);
+                            incrementVideoView(videoId);
+                        }
+                        
                         scrollCount++;
                         if (scrollCount % 3 === 0 && typeof show_12214110 === 'function') {
                             show_12214110().catch(e => console.log(e));
@@ -222,6 +227,16 @@
             }, { threshold: 0.7 });
 
             document.querySelectorAll('.video-card').forEach(card => observer.observe(card));
+        }
+
+        async function incrementVideoView(videoId) {
+            const video = allVideos.find(v => v.id === videoId);
+            if (!video) return;
+            
+            video.views_count = (video.views_count || 0) + 1;
+            
+            // Supabase ডাটাবেজে ভিউ কাউন্ট আপডেট করা
+            await supabase.from('videos').update({ views_count: video.views_count }).eq('id', videoId);
         }
 
         function togglePlay(video) {
@@ -313,7 +328,9 @@
                     user_name: currentUser.name,
                     username: currentUser.username,
                     caption: caption,
-                    video_url: videoUrl
+                    video_url: videoUrl,
+                    likes_count: 0,
+                    views_count: 0
                 });
 
                 postBtn.disabled = false;
@@ -351,6 +368,7 @@
 
             const userVideos = allVideos.filter(v => v.user_id === userId);
             const totalLikes = userVideos.reduce((sum, v) => sum + (v.likes_count || 0), 0);
+            const totalViews = userVideos.reduce((sum, v) => sum + (v.views_count || 0), 0);
             const initial = userName ? userName[0].toUpperCase() : 'U';
 
             profileEl.innerHTML = `
@@ -361,14 +379,15 @@
                     <p style="color:#888; font-size:14px;">@${escapeHtml(username || 'user')}</p>
                     <div class="profile-stats">
                         <div class="stat-box"><span>${userVideos.length}</span><small>ভিডিও</small></div>
-                        <div class="stat-box"><span>${totalLikes}</span><small>লাইক</small></div>
+                        <div class="stat-box"><span>${totalLikes}</span><small>মোট লাইক</small></div>
+                        <div class="stat-box"><span>${totalViews}</span><small>মোট ভিউ</small></div>
                     </div>
                 </div>
                 <div class="video-grid">
                     ${userVideos.length ? userVideos.map(v => `
                         <div class="grid-item">
                             <video src="${v.video_url}" muted onclick="playSingleFromProfile('${v.id}')"></video>
-                            <div class="grid-likes">♥ ${v.likes_count || 0}</div>
+                            <div class="grid-stats"><span>👁️ ${v.views_count || 0}</span><span>♥ ${v.likes_count || 0}</span></div>
                             ${userId === currentUser.id ? `<button class="delete-btn" onclick="deleteVideo('${v.id}')">মুছুন</button>` : ''}
                         </div>
                     `).join('') : '<p style="grid-column: span 3; text-align:center; color:#666; margin-top:30px;">কোনো ভিডিও নেই</p>'}
