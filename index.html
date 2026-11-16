@@ -50,10 +50,9 @@
 
         #upload-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; align-items: flex-end; }
         .modal-content { background: #1c1c1e; width: 100%; border-radius: 20px 20px 0 0; padding: 24px; }
-        .file-box { border: 2px dashed #444; border-radius: 12px; padding: 25px; text-align: center; margin: 15px 0; cursor: pointer; color: #aaa; }
+        .file-box { border: 2px dashed #444; border-radius: 12px; padding: 25px; text-align: center; margin: 15px 0; cursor: pointer; color: #aaa; display: block; }
         textarea { width: 100%; background: #2c2c2e; border: none; border-radius: 10px; padding: 12px; color: #fff; font-size: 15px; resize: none; height: 80px; margin-bottom: 15px; }
         
-        /* Progress Bar Styles */
         .progress-container { width: 100%; background: #333; border-radius: 8px; margin-bottom: 15px; overflow: hidden; display: none; }
         .progress-bar { width: 0%; height: 18px; background: #2b82ff; text-align: center; font-size: 11px; font-weight: bold; line-height: 18px; color: #fff; transition: width 0.2s; }
 
@@ -86,13 +85,13 @@
     <div id="upload-modal">
         <div class="modal-content">
             <h3>Upload New Video</h3>
-            <label class="file-box" id="file-label">
+            <label class="file-box" id="file-label" for="video-input">
                 📁 Select Video (Max 25 MB)
-                <input type="file" id="video-input" accept="video/mp4,video/webm,video/quicktime" hidden>
             </label>
+            <input type="file" id="video-input" accept="video/mp4,video/webm,video/quicktime" style="display:none;" onchange="handleFileSelect(event)">
+            
             <textarea id="caption-input" placeholder="Write a caption..."></textarea>
             
-            <!-- Progress Bar HTML -->
             <div class="progress-container" id="progress-container">
                 <div class="progress-bar" id="progress-bar">0%</div>
             </div>
@@ -292,26 +291,28 @@
             }
         }
 
-        document.getElementById('video-input').addEventListener('change', function(e) {
+        function handleFileSelect(e) {
             const file = e.target.files[0];
             if (file) {
                 if (file.size > 25 * 1024 * 1024) {
                     alert('Video size must be less than 25 MB!');
-                    this.value = '';
+                    e.target.value = '';
                     return;
                 }
-                document.getElementById('file-label').innerText = '✅ Selected: ' + file.name + ' (' + (file.size / (1024*1024)).toFixed(2) + ' MB)';
+                document.getElementById('file-label').innerHTML = `✅ Selected: ${file.name} (${(file.size / (1024*1024)).toFixed(2)} MB)`;
             }
-        });
+        }
 
-        // XMLHttpRequest দিয়ে প্রোগ্রেস পার্সেন্টেজ ট্র্যাক করার ফাংশন
         function uploadVideo() {
             const fileInput = document.getElementById('video-input');
             const caption = document.getElementById('caption-input').value.trim();
             const postBtn = document.getElementById('post-btn');
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                return alert('Please select a video first!');
+            }
+            
             const file = fileInput.files[0];
-
-            if (!file) return alert('Please select a video!');
 
             postBtn.disabled = true;
             postBtn.innerText = 'Uploading...';
@@ -367,7 +368,7 @@
                             closeUploadModal();
                             fileInput.value = '';
                             document.getElementById('caption-input').value = '';
-                            document.getElementById('file-label').innerText = '📁 Select Video (Max 25 MB)';
+                            document.getElementById('file-label').innerHTML = '📁 Select Video (Max 25 MB)';
                             await loadVideos();
                             showFeed();
                         }
