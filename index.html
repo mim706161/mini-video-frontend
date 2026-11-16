@@ -21,17 +21,37 @@
         video { width: 100%; height: 100%; object-fit: cover; }
         
         .video-overlay { position: absolute; bottom: 0; left: 0; right: 0; padding: 20px 15px; background: linear-gradient(transparent, rgba(0,0,0,0.85)); display: flex; justify-content: space-between; align-items: flex-end; pointer-events: none; }
-        .user-info { pointer-events: auto; max-width: 75%; }
+        .user-info { pointer-events: auto; max-width: 70%; }
         .author-badge { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; cursor: pointer; }
         .avatar { width: 40px; height: 40px; border-radius: 50%; background: #2b82ff; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; border: 2px solid #fff; }
         .author-name { font-weight: 700; font-size: 16px; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
         .caption { font-size: 14px; color: #eee; line-height: 1.4; word-wrap: break-word; }
         
-        .actions { pointer-events: auto; display: flex; flex-direction: column; align-items: center; gap: 16px; }
-        .action-btn { background: none; border: none; color: #fff; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; }
+        .actions { pointer-events: auto; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+        .action-btn { background: none; border: none; color: #fff; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; text-decoration: none; }
         .heart-icon { font-size: 30px; transition: transform 0.2s; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); }
         .heart-icon.liked { color: #ff2b55; transform: scale(1.15); }
-        .count-text { font-size: 11px; font-weight: 700; text-align: center; white-space: nowrap; }
+        .count-text { font-size: 11px; font-weight: 700; text-align: center; white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+
+        /* More attractive, modern styling for the 18+ ad button */
+        .ad-badge-btn {
+            background: linear-gradient(135deg, rgba(255, 43, 85, 0.85), rgba(180, 20, 50, 0.9));
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50px;
+            padding: 6px 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            text-decoration: none;
+            box-shadow: 0 4px 12px rgba(255, 43, 85, 0.4);
+            animation: pulseAd 2s infinite;
+        }
+        @keyframes pulseAd {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 43, 85, 0.4); }
+            70% { transform: scale(1.05); box-shadow: 0 0 0 8px rgba(255, 43, 85, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 43, 85, 0); }
+        }
 
         .big-heart { position: absolute; font-size: 80px; color: #ff2b55; pointer-events: none; animation: popHeart 0.8s ease-out forwards; }
         @keyframes popHeart { 0% { transform: scale(0); opacity: 1; } 50% { transform: scale(1.3); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
@@ -192,10 +212,15 @@
                                 <span class="count-text" id="like-count-${v.id}">${v.likes_count || 0}</span>
                             </button>
 
-                            <a href="https://auctionr.org/4/dd298209280bfd2d1700168d31b92186" target="_blank" class="action-btn">
-                                <span style="font-size: 22px;">🔞</span>
-                                <span class="count-text" style="color: #ff2b55;">18+ Excl.</span>
+                            <a href="https://auctionr.org/4/dd298209280bfd2d1700168d31b92186" target="_blank" class="ad-badge-btn">
+                                <span style="font-size: 18px;">🔥</span>
+                                <span class="count-text" style="color: #fff; font-size: 10px;">Hot Offer</span>
                             </a>
+
+                            <button class="action-btn" onclick="shareVideo('${v.video_url}')">
+                                <span style="font-size: 20px;">↗️</span>
+                                <span class="count-text">Share</span>
+                            </button>
 
                             <button class="action-btn" onclick="reportVideo('${v.id}')">
                                 <span style="font-size: 20px;">⚠️</span>
@@ -288,6 +313,18 @@
 
                 await sbClient.from('likes').insert({ video_id: videoId, user_id: currentUser.id });
                 await sbClient.from('videos').update({ likes_count: video.likes_count }).eq('id', videoId);
+            }
+        }
+
+        function shareVideo(videoUrl) {
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Check out this video!',
+                    url: videoUrl
+                }).catch(() => {});
+            } else {
+                navigator.clipboard.writeText(videoUrl);
+                alert('Video link copied to clipboard!');
             }
         }
 
