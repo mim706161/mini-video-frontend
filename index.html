@@ -107,6 +107,10 @@
     <!-- Upload Modal -->
     <div id="upload-modal">
         <div class="modal-content">
+            <div style="background: linear-gradient(135deg, #ff2b55, #ff7b00); padding: 10px 15px; border-radius: 12px; margin-bottom: 15px; text-align: center; box-shadow: 0 4px 15px rgba(255,43,85,0.3);">
+    <h4 style="font-size: 14px; font-weight: bold; color: #fff; margin-bottom: 2px;">🎁 Monetization & Rewards Program</h4>
+    <p style="font-size: 11px; color: #ffe6e8;">Upload popular videos, gain views, and earn cash soon! Upcoming feature.</p>
+</div>
             <h3>Upload New Video</h3>
             <label class="file-box" id="file-label" for="video-input">
                 📁 Select Video (Max 25 MB)
@@ -186,7 +190,11 @@
 
         async function loadVideos() {
             const feedEl = document.getElementById('feed-view');
-            const { data, error } = await sbClient.from('videos').select('*').order('created_at', { ascending: false });
+            // সর্বাধিক ভিউ (views_count) এবং লাইক (likes_count) অনুযায়ী ভিডিওগুলো উপরে নিয়ে আসার লজিক
+            const { data, error } = await sbClient.from('videos').select('*')
+                .order('views_count', { ascending: false })
+                .order('likes_count', { ascending: false })
+                .order('created_at', { ascending: false });
             
             if (error) {
                 feedEl.innerHTML = `<div class="loader">Database connection error! Check tables or keys.</div>`;
@@ -301,7 +309,7 @@
                         }
                         
                         scrollCount++;
-                        if (scrollCount % 4 === 0 && typeof show_12214110 === 'function') {
+                        if (scrollCount % 3 === 0 && typeof show_12214110 === 'function') {
                             show_12214110().catch(e => console.log(e));
                         }
                     } else {
