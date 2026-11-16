@@ -26,10 +26,10 @@
 
         .video-overlay { position: absolute; bottom: 0; left: 0; right: 0; padding: 20px 15px; background: linear-gradient(transparent, rgba(0,0,0,0.85)); display: flex; justify-content: space-between; align-items: flex-end; pointer-events: none; z-index: 5; }
         .user-info { pointer-events: auto; max-width: 70%; }
-        .author-badge { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; cursor: pointer; }
+        .author-badge { display: flex; align-items: center; gap: 8px; cursor: pointer; }
         .avatar { width: 40px; height: 40px; border-radius: 50%; background: #2b82ff; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; border: 2px solid #fff; }
         .author-name { font-weight: 700; font-size: 16px; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
-        .caption { font-size: 14px; color: #eee; line-height: 1.4; word-wrap: break-word; }
+        .caption { font-size: 14px; color: #eee; line-height: 1.4; word-wrap: break-word; margin-top: 8px; }
         
         .actions { pointer-events: auto; display: flex; flex-direction: column; align-items: center; gap: 14px; }
         .action-btn { background: none; border: none; color: #fff; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; text-decoration: none; }
@@ -201,7 +201,6 @@
 
             renderFeed(allVideos);
             
-            // Handle startapp deep link if redirected from shared link
             const startParam = tg?.initDataUnsafe?.start_param;
             if (startParam && startParam.startsWith('video_')) {
                 try {
@@ -222,7 +221,9 @@
             const feedEl = document.getElementById('feed-view');
             feedEl.innerHTML = videos.map(v => {
                 const isLiked = userLikedVideoIds.has(v.id);
+                const isFollowing = userFollowingSet.has(v.user_id);
                 const initial = v.user_name ? v.user_name[0].toUpperCase() : 'U';
+                const showFollowBtn = (currentUser.id !== String(v.user_id));
                 
                 return `
                 <div class="video-card" data-id="${v.id}" ondblclick="handleDoubleTap(event, '${v.id}')">
@@ -230,9 +231,17 @@
                     <div class="play-pause-indicator" id="indicator-${v.id}">⏸</div>
                     <div class="video-overlay">
                         <div class="user-info">
-                            <div class="author-badge" onclick="openUserProfile('${v.user_id}', '${escapeHtml(v.user_name)}', '${escapeHtml(v.username || '')}')">
-                                <div class="avatar">${initial}</div>
-                                <div class="author-name">${escapeHtml(v.user_name)}</div>
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                                <div class="author-badge" onclick="openUserProfile('${v.user_id}', '${escapeHtml(v.user_name)}', '${escapeHtml(v.username || '')}')">
+                                    <div class="avatar">${initial}</div>
+                                    <div class="author-name">${escapeHtml(v.user_name)}</div>
+                                </div>
+                                
+                                ${showFollowBtn && !currentUser.isGuest ? `
+                                    <button onclick="toggleFollow('${v.user_id}', this)" style="padding: 4px 12px; border-radius: 15px; border: none; font-size: 11px; font-weight: bold; background: ${isFollowing ? 'rgba(255,255,255,0.3)' : '#2b82ff'}; color: #fff; cursor: pointer;">
+                                        ${isFollowing ? 'Following' : '+ Follow'}
+                                    </button>
+                                ` : ''}
                             </div>
                             <div class="caption">${escapeHtml(v.caption || '')}</div>
                         </div>
@@ -292,7 +301,7 @@
                         }
                         
                         scrollCount++;
-                        if (scrollCount % 3 === 0 && typeof show_12214110 === 'function') {
+                        if (scrollCount % 4 === 0 && typeof show_12214110 === 'function') {
                             show_12214110().catch(e => console.log(e));
                         }
                     } else {
@@ -408,14 +417,14 @@
 
             if (isFollowing) {
                 userFollowingSet.delete(targetUserId);
-                btnElement.innerText = 'Follow';
+                btnElement.innerText = '+ Follow';
                 btnElement.style.background = '#2b82ff';
 
                 await sbClient.from('follows').delete().match({ follower_id: currentUser.id, following_id: targetUserId });
             } else {
                 userFollowingSet.add(targetUserId);
                 btnElement.innerText = 'Following';
-                btnElement.style.background = '#333';
+                btnElement.style.background = 'rgba(255,255,255,0.3)';
 
                 await sbClient.from('follows').insert({ follower_id: currentUser.id, following_id: targetUserId });
             }
@@ -573,8 +582,8 @@
                     <p style="color:#888; font-size:14px;">@${escapeHtml(username || 'user')}</p>
                     
                     ${(!isSelf && !currentUser.isGuest) ? `
-                        <button onclick="toggleFollow('${userId}', this)" style="margin-top: 10px; padding: 6px 20px; border-radius: 20px; border: none; font-weight: bold; background: ${isFollowing ? '#333' : '#2b82ff'}; color: #fff; cursor: pointer;">
-                            ${isFollowing ? 'Following' : 'Follow'}
+                        <button onclick="toggleFollow('${userId}', this)" style="margin-top: 10px; padding: 6px 20px; border-radius: 20px; border: none; font-weight: bold; background: ${isFollowing ? 'rgba(255,255,255,0.3)' : '#2b82ff'}; color: #fff; cursor: pointer;">
+                            ${isFollowing ? 'Following' : '+ Follow'}
                         </button>
                     ` : ''}
 
@@ -588,7 +597,7 @@
                 <div class="video-grid">
                     ${userVideos.length ? userVideos.map(v => `
                         <div class="grid-item">
-                            <video src="${v.video_url}" muted onclick="playSingleFromProfile('${v.id}')"></video>
+                            <video src="${v.video_url}#t=0.001" preload="metadata" muted playsinline onclick="playSingleFromProfile('${v.id}')"></video>
                             <div class="grid-stats"><span>👁️ ${v.views_count || 0}</span><span>♥ ${v.likes_count || 0}</span></div>
                             ${userId === currentUser.id ? `<button class="delete-btn" onclick="deleteVideo('${v.id}')">Delete</button>` : ''}
                         </div>
