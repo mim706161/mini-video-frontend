@@ -33,7 +33,6 @@
         .heart-icon.liked { color: #ff2b55; transform: scale(1.15); }
         .count-text { font-size: 11px; font-weight: 700; text-align: center; white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
 
-        /* More attractive, modern styling for the 18+ ad button */
         .ad-badge-btn {
             background: linear-gradient(135deg, rgba(255, 43, 85, 0.85), rgba(180, 20, 50, 0.9));
             border: 1px solid rgba(255, 255, 255, 0.3);
@@ -143,32 +142,43 @@
             tg.expand();
         }
 
+        // Check if real Telegram User exists
+        const hasTelegramUser = !!tg?.initDataUnsafe?.user;
         const tgUser = tg?.initDataUnsafe?.user || {
-            id: 'guest_' + (localStorage.getItem('guest_id') || Math.floor(Math.random() * 100000)),
+            id: 'guest_' + Math.floor(Math.random() * 100000),
             first_name: 'Guest User',
             username: 'guest'
         };
-        if (!tg?.initDataUnsafe?.user) localStorage.setItem('guest_id', tgUser.id.replace('guest_', ''));
 
         const currentUser = {
             id: String(tgUser.id),
             name: [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' '),
-            username: tgUser.username || 'user'
+            username: tgUser.username || 'user',
+            isGuest: !hasTelegramUser
         };
 
         let allVideos = [];
         let userLikedVideoIds = new Set();
+        let userFollowingSet = new Set();
         let viewedSessionSet = new Set();
         let scrollCount = 0;
 
         async function initApp() {
-            await fetchUserLikes();
+            if (!currentUser.isGuest) {
+                await fetchUserLikes();
+                await fetchUserFollowing();
+            }
             await loadVideos();
         }
 
         async function fetchUserLikes() {
             const { data } = await sbClient.from('likes').select('video_id').eq('user_id', currentUser.id);
             if (data) userLikedVideoIds = new Set(data.map(item => item.video_id));
+        }
+
+        async function fetchUserFollowing() {
+            const { data } = await sbClient.from('follows').select('following_id').eq('follower_id', currentUser.id);
+            if (data) userFollowingSet = new Set(data.map(item => item.following_id));
         }
 
         async function loadVideos() {
@@ -290,6 +300,11 @@
         }
 
         async function toggleLike(videoId) {
+            if (currentUser.isGuest) {
+                alert('Please open this app inside Telegram to like or interact!');
+                return;
+            }
+
             const heartEl = document.getElementById(`heart-${videoId}`);
             const countEl = document.getElementById(`like-count-${videoId}`);
             const video = allVideos.find(v => v.id === videoId);
@@ -313,6 +328,29 @@
 
                 await sbClient.from('likes').insert({ video_id: videoId, user_id: currentUser.id });
                 await sbClient.from('videos').update({ likes_count: video.likes_count }).eq('id', videoId);
+            }
+        }
+
+        async function toggleFollow(targetUserId, btnElement) {
+            if (currentUser.isGuest) {
+                alert('Please open this app inside Telegram to follow creators!');
+                return;
+            }
+
+            const isFollowing = userFollowingSet.has(targetUserId);
+
+            if (isFollowing) {
+                userFollowingSet.delete(targetUserId);
+                btnElement.innerText = 'Follow';
+                btnElement.style.background = '#2b82ff';
+
+                await sbClient.from('follows').delete().match({ follower_id: currentUser.id, following_id: targetUserId });
+            } else {
+                userFollowingSet.add(targetUserId);
+                btnElement.innerText = 'Following';
+                btnElement.style.background = '#333';
+
+                await sbClient.from('follows').insert({ follower_id: currentUser.id, following_id: targetUserId });
             }
         }
 
@@ -341,6 +379,13 @@
         }
 
         function uploadVideo() {
+            // Account restriction check
+            if (currentUser.isGuest) {
+                alert('Access Denied! You must open this app inside Telegram with a valid account to upload videos.');
+                closeUploadModal();
+                return;
+            }
+
             const fileInput = document.getElementById('video-input');
             const caption = document.getElementById('caption-input').value.trim();
             const postBtn = document.getElementById('post-btn');
@@ -436,7 +481,7 @@
             openUserProfile(currentUser.id, currentUser.name, currentUser.username, true);
         }
 
-        function openUserProfile(userId, userName, username, isSelf = false) {
+        async function openUserProfile(userId, userName, username, isSelf = false) {
             document.querySelectorAll('video').forEach(v => v.pause());
             document.getElementById('feed-view').style.display = 'none';
             const profileEl = document.getElementById('profile-view');
@@ -445,6 +490,11 @@
             const userVideos = allVideos.filter(v => v.user_id === userId);
             const totalLikes = userVideos.reduce((sum, v) => sum + (v.likes_count || 0), 0);
             const totalViews = userVideos.reduce((sum, v) => sum + (v.views_count || 0), 0);
+            
+            const { data: followersData } = await sbClient.from('follows').select('*').eq('following_id', userId);
+            const followersCount = followersData ? followersData.length : 0;
+            
+            const isFollowing = userFollowingSet.has(userId);
             const initial = userName ? userName[0].toUpperCase() : 'U';
 
             profileEl.innerHTML = `
@@ -453,10 +503,17 @@
                     <div class="profile-avatar">${initial}</div>
                     <h2>${escapeHtml(userName)}</h2>
                     <p style="color:#888; font-size:14px;">@${escapeHtml(username || 'user')}</p>
+                    
+                    ${(!isSelf && !currentUser.isGuest) ? `
+                        <button onclick="toggleFollow('${userId}', this)" style="margin-top: 10px; padding: 6px 20px; border-radius: 20px; border: none; font-weight: bold; background: ${isFollowing ? '#333' : '#2b82ff'}; color: #fff; cursor: pointer;">
+                            ${isFollowing ? 'Following' : 'Follow'}
+                        </button>
+                    ` : ''}
+
                     <div class="profile-stats">
                         <div class="stat-box"><span>${userVideos.length}</span><small>Videos</small></div>
-                        <div class="stat-box"><span>${totalLikes}</span><small>Total Likes</small></div>
-                        <div class="stat-box"><span>${totalViews}</span><small>Total Views</small></div>
+                        <div class="stat-box"><span>${followersCount}</span><small>Followers</small></div>
+                        <div class="stat-box"><span>${totalLikes}</span><small>Likes</small></div>
                     </div>
                 </div>
                 <div class="video-grid">
@@ -498,7 +555,14 @@
             document.getElementById('nav-profile').classList.remove('active');
         }
 
-        function openUploadModal() { document.getElementById('upload-modal').style.display = 'flex'; }
+        function openUploadModal() { 
+            if (currentUser.isGuest) {
+                alert('Please open this app inside Telegram to upload videos!');
+                return;
+            }
+            document.getElementById('upload-modal').style.display = 'flex'; 
+        }
+
         function closeUploadModal() { 
             document.getElementById('upload-modal').style.display = 'none'; 
             document.getElementById('progress-container').style.display = 'none';
