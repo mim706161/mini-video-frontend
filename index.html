@@ -655,6 +655,7 @@
             }
         }
 
+        // ✅ ওয়ান-কল আপলোড ফাংশন (কোনো রিট্রাই বা লুপ ছাড়াই সরাসরি আপলোড)
         function uploadVideo() {
             if (currentUser.isGuest) {
                 alert('Access Denied! You must open this app inside Telegram with a valid account to upload videos.');
@@ -673,7 +674,7 @@
             const file = fileInput.files[0];
 
             postBtn.disabled = true;
-            postBtn.innerText = 'Connecting Server...';
+            postBtn.innerText = 'Uploading...';
             
             const progressContainer = document.getElementById('progress-container');
             const progressBar = document.getElementById('progress-bar');
@@ -681,96 +682,86 @@
             progressBar.style.width = '0%';
             progressBar.innerText = '0%';
 
-            function sendUploadRequest(attempt = 1) {
-                const formData = new FormData();
-                formData.append('video', file);
+            const formData = new FormData();
+            formData.append('video', file);
 
-                const xhr = new XMLHttpRequest();
-                xhr.open('POST', BACKEND_UPLOAD_URL, true);
-                xhr.timeout = 180000;
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', BACKEND_UPLOAD_URL, true);
+            xhr.timeout = 180000; // ৩ মিনিট টাইমআউট
 
-                xhr.upload.onprogress = function(e) {
-                    if (e.lengthComputable) {
-                        const percentComplete = Math.round((e.loaded / e.total) * 100);
-                        progressBar.style.width = percentComplete + '%';
-                        progressBar.innerText = percentComplete + '% (' + (e.loaded / (1024*1024)).toFixed(1) + ' MB / ' + (e.total / (1024*1024)).toFixed(1) + ' MB)';
-                    }
-                };
+            xhr.upload.onprogress = function(e) {
+                if (e.lengthComputable) {
+                    const percentComplete = Math.round((e.loaded / e.total) * 100);
+                    progressBar.style.width = percentComplete + '%';
+                    progressBar.innerText = percentComplete + '% (' + (e.loaded / (1024*1024)).toFixed(1) + ' MB / ' + (e.total / (1024*1024)).toFixed(1) + ' MB)';
+                }
+            };
 
-                xhr.onload = async function() {
-                    try {
-                        if (xhr.status === 200) {
-                            const result = JSON.parse(xhr.responseText);
-                            if (!result.success) {
-                                throw new Error(result.error || 'Upload failed');
-                            }
-
-                            const videoUrl = result.videoUrl;
-                            progressBar.innerText = 'Saving to Database...';
-
-                            const { error: dbError } = await sbClient.from('videos').insert({
-                                user_id: currentUser.id,
-                                user_name: currentUser.name,
-                                username: currentUser.username,
-                                caption: caption,
-                                video_url: videoUrl,
-                                likes_count: 0,
-                                views_count: 0
-                            });
-
-                            postBtn.disabled = false;
-                            postBtn.innerText = 'Post';
-                            progressContainer.style.display = 'none';
-
-                            if (dbError) {
-                                alert('Database save failed: ' + dbError.message);
-                            } else {
-                                closeUploadModal();
-                                fileInput.value = '';
-                                document.getElementById('video-input').value = '';
-                                document.getElementById('caption-input').value = '';
-                                document.getElementById('file-label').innerHTML = '📁 Select Video (Max 25 MB)';
-                                progressBar.style.width = '0%';
-                                progressBar.innerText = '0%';
-                                
-                                await loadVideos();
-                                showFeed();
-                            }
-                        } else {
-                            throw new Error('Server status ' + xhr.status);
+            xhr.onload = async function() {
+                try {
+                    if (xhr.status === 200) {
+                        const result = JSON.parse(xhr.responseText);
+                        if (!result.success) {
+                            throw new Error(result.error || 'Upload failed');
                         }
-                    } catch (err) {
-                        handleRetry(attempt, err.message);
+
+                        const videoUrl = result.videoUrl;
+                        progressBar.innerText = 'Saving to Database...';
+
+                        const { error: dbError } = await sbClient.from('videos').insert({
+                            user_id: currentUser.id,
+                            user_name: currentUser.name,
+                            username: currentUser.username,
+                            caption: caption,
+                            video_url: videoUrl,
+                            likes_count: 0,
+                            views_count: 0
+                        });
+
+                        postBtn.disabled = false;
+                        postBtn.innerText = 'Post';
+                        progressContainer.style.display = 'none';
+
+                        if (dbError) {
+                            alert('Database save failed: ' + dbError.message);
+                        } else {
+                            closeUploadModal();
+                            fileInput.value = '';
+                            document.getElementById('video-input').value = '';
+                            document.getElementById('caption-input').value = '';
+                            document.getElementById('file-label').innerHTML = '📁 Select Video (Max 25 MB)';
+                            progressBar.style.width = '0%';
+                            progressBar.innerText = '0%';
+                            
+                            await loadVideos();
+                            showFeed();
+                        }
+                    } else {
+                        throw new Error('Server upload failed with status ' + xhr.status);
                     }
-                };
-
-                xhr.onerror = function() {
-                    handleRetry(attempt, 'Network connection dropped');
-                };
-
-                xhr.ontimeout = function () {
-                    handleRetry(attempt, 'Server timeout');
-                };
-
-                xhr.send(formData);
-            }
-
-            function handleRetry(attempt, errorReason) {
-                if (attempt < 3) {
-                    postBtn.innerText = `Waking Server (${attempt}/3)...`;
-                    progressBar.innerText = `Server is waking up, retrying in 4s...`;
-                    setTimeout(() => {
-                        sendUploadRequest(attempt + 1);
-                    }, 4000);
-                } else {
-                    alert('Upload failed after multiple attempts. Render server might be offline or unstable. Error: ' + errorReason);
+                } catch (err) {
+                    alert('Upload Error: ' + err.message);
                     postBtn.disabled = false;
                     postBtn.innerText = 'Post';
                     progressContainer.style.display = 'none';
                 }
-            }
+            };
 
-            sendUploadRequest(1);
+            xhr.onerror = function() {
+                alert('Network error! Please check your internet connection or try again.');
+                postBtn.disabled = false;
+                postBtn.innerText = 'Post';
+                progressContainer.style.display = 'none';
+            };
+
+            xhr.ontimeout = function () {
+                alert('Upload timed out! The server took too long to respond.');
+                postBtn.disabled = false;
+                postBtn.innerText = 'Post';
+                progressContainer.style.display = 'none';
+            };
+
+            xhr.send(formData);
         }
 
         function openMyProfile() {
