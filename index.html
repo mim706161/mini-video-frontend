@@ -301,8 +301,6 @@
 
         async function loadVideos() {
             const feedEl = document.getElementById('feed-view');
-            
-            // ✅ ফিডে সবার উপরে নতুন আপলোড করা ভিডিও (Newest to Oldest) দেখানোর জন্য লজিক আপডেট করা হলো
             const { data, error } = await sbClient.from('videos').select('*')
                 .order('created_at', { ascending: false });
             
@@ -675,7 +673,7 @@
             const file = fileInput.files[0];
 
             postBtn.disabled = true;
-            postBtn.innerText = 'Connecting...';
+            postBtn.innerText = 'Connecting Server...';
             
             const progressContainer = document.getElementById('progress-container');
             const progressBar = document.getElementById('progress-bar');
@@ -683,86 +681,96 @@
             progressBar.style.width = '0%';
             progressBar.innerText = '0%';
 
-            const formData = new FormData();
-            formData.append('video', file);
+            function sendUploadRequest(attempt = 1) {
+                const formData = new FormData();
+                formData.append('video', file);
 
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', BACKEND_UPLOAD_URL, true);
-            xhr.timeout = 120000;
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', BACKEND_UPLOAD_URL, true);
+                xhr.timeout = 180000;
 
-            xhr.upload.onprogress = function(e) {
-                if (e.lengthComputable) {
-                    const percentComplete = Math.round((e.loaded / e.total) * 100);
-                    progressBar.style.width = percentComplete + '%';
-                    progressBar.innerText = percentComplete + '% (' + (e.loaded / (1024*1024)).toFixed(1) + ' MB / ' + (e.total / (1024*1024)).toFixed(1) + ' MB)';
-                }
-            };
-
-            xhr.onload = async function() {
-                try {
-                    if (xhr.status === 200) {
-                        const result = JSON.parse(xhr.responseText);
-                        if (!result.success) {
-                            throw new Error(result.error || 'Upload failed');
-                        }
-
-                        const videoUrl = result.videoUrl;
-                        progressBar.innerText = 'Saving to Database...';
-
-                        const { error: dbError } = await sbClient.from('videos').insert({
-                            user_id: currentUser.id,
-                            user_name: currentUser.name,
-                            username: currentUser.username,
-                            caption: caption,
-                            video_url: videoUrl,
-                            likes_count: 0,
-                            views_count: 0
-                        });
-
-                        postBtn.disabled = false;
-                        postBtn.innerText = 'Post';
-                        progressContainer.style.display = 'none';
-
-                        if (dbError) {
-                            alert('Database save failed: ' + dbError.message);
-                        } else {
-                            closeUploadModal();
-                            fileInput.value = '';
-                            document.getElementById('video-input').value = '';
-                            document.getElementById('caption-input').value = '';
-                            document.getElementById('file-label').innerHTML = '📁 Select Video (Max 25 MB)';
-                            progressBar.style.width = '0%';
-                            progressBar.innerText = '0%';
-                            
-                            await loadVideos();
-                            showFeed();
-                        }
-                    } else {
-                        throw new Error('Server upload failed with status ' + xhr.status);
+                xhr.upload.onprogress = function(e) {
+                    if (e.lengthComputable) {
+                        const percentComplete = Math.round((e.loaded / e.total) * 100);
+                        progressBar.style.width = percentComplete + '%';
+                        progressBar.innerText = percentComplete + '% (' + (e.loaded / (1024*1024)).toFixed(1) + ' MB / ' + (e.total / (1024*1024)).toFixed(1) + ' MB)';
                     }
-                } catch (err) {
-                    alert('Upload Error: ' + err.message + '. Render server might be waking up, please try uploading again in 10 seconds.');
+                };
+
+                xhr.onload = async function() {
+                    try {
+                        if (xhr.status === 200) {
+                            const result = JSON.parse(xhr.responseText);
+                            if (!result.success) {
+                                throw new Error(result.error || 'Upload failed');
+                            }
+
+                            const videoUrl = result.videoUrl;
+                            progressBar.innerText = 'Saving to Database...';
+
+                            const { error: dbError } = await sbClient.from('videos').insert({
+                                user_id: currentUser.id,
+                                user_name: currentUser.name,
+                                username: currentUser.username,
+                                caption: caption,
+                                video_url: videoUrl,
+                                likes_count: 0,
+                                views_count: 0
+                            });
+
+                            postBtn.disabled = false;
+                            postBtn.innerText = 'Post';
+                            progressContainer.style.display = 'none';
+
+                            if (dbError) {
+                                alert('Database save failed: ' + dbError.message);
+                            } else {
+                                closeUploadModal();
+                                fileInput.value = '';
+                                document.getElementById('video-input').value = '';
+                                document.getElementById('caption-input').value = '';
+                                document.getElementById('file-label').innerHTML = '📁 Select Video (Max 25 MB)';
+                                progressBar.style.width = '0%';
+                                progressBar.innerText = '0%';
+                                
+                                await loadVideos();
+                                showFeed();
+                            }
+                        } else {
+                            throw new Error('Server status ' + xhr.status);
+                        }
+                    } catch (err) {
+                        handleRetry(attempt, err.message);
+                    }
+                };
+
+                xhr.onerror = function() {
+                    handleRetry(attempt, 'Network connection dropped');
+                };
+
+                xhr.ontimeout = function () {
+                    handleRetry(attempt, 'Server timeout');
+                };
+
+                xhr.send(formData);
+            }
+
+            function handleRetry(attempt, errorReason) {
+                if (attempt < 3) {
+                    postBtn.innerText = `Waking Server (${attempt}/3)...`;
+                    progressBar.innerText = `Server is waking up, retrying in 4s...`;
+                    setTimeout(() => {
+                        sendUploadRequest(attempt + 1);
+                    }, 4000);
+                } else {
+                    alert('Upload failed after multiple attempts. Render server might be offline or unstable. Error: ' + errorReason);
                     postBtn.disabled = false;
                     postBtn.innerText = 'Post';
                     progressContainer.style.display = 'none';
                 }
-            };
+            }
 
-            xhr.onerror = function() {
-                alert('Network error! Please check your internet connection or try again.');
-                postBtn.disabled = false;
-                postBtn.innerText = 'Post';
-                progressContainer.style.display = 'none';
-            };
-
-            xhr.ontimeout = function () {
-                alert('Upload timed out! The server took too long to respond. Please try again.');
-                postBtn.disabled = false;
-                postBtn.innerText = 'Post';
-                progressContainer.style.display = 'none';
-            };
-
-            xhr.send(formData);
+            sendUploadRequest(1);
         }
 
         function openMyProfile() {
@@ -777,7 +785,6 @@
             const profileEl = document.getElementById('profile-view');
             profileEl.style.display = 'block';
 
-            // ইউজারের নিজের ভিডিওগুলো নতুন থেকে পুরোনো ক্রমানুসারে (Newest to Oldest) সাজানো
             const userVideos = allVideos.filter(v => v.user_id === userId).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             const totalLikes = userVideos.reduce((sum, v) => sum + (v.likes_count || 0), 0);
             const totalViews = userVideos.reduce((sum, v) => sum + (v.views_count || 0), 0);
