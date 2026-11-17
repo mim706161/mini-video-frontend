@@ -301,9 +301,9 @@
 
         async function loadVideos() {
             const feedEl = document.getElementById('feed-view');
+            
+            // ✅ ফিডে সবার উপরে নতুন আপলোড করা ভিডিও (Newest to Oldest) দেখানোর জন্য লজিক আপডেট করা হলো
             const { data, error } = await sbClient.from('videos').select('*')
-                .order('views_count', { ascending: false })
-                .order('likes_count', { ascending: false })
                 .order('created_at', { ascending: false });
             
             if (error) {
@@ -368,7 +368,7 @@
                             <div class="caption">${escapeHtml(v.caption || '')}</div>
                         </div>
                         
-                        <!-- Right Side Action Buttons (Mute Removed from here) -->
+                        <!-- Right Side Action Buttons -->
                         <div class="actions">
                             <button class="action-btn" onclick="toggleLike('${v.id}')">
                                 <span class="heart-icon ${isLiked ? 'liked' : ''}" id="heart-${v.id}">♥</span>
@@ -675,7 +675,7 @@
             const file = fileInput.files[0];
 
             postBtn.disabled = true;
-            postBtn.innerText = 'Uploading...';
+            postBtn.innerText = 'Connecting...';
             
             const progressContainer = document.getElementById('progress-container');
             const progressBar = document.getElementById('progress-bar');
@@ -688,6 +688,7 @@
 
             const xhr = new XMLHttpRequest();
             xhr.open('POST', BACKEND_UPLOAD_URL, true);
+            xhr.timeout = 120000;
 
             xhr.upload.onprogress = function(e) {
                 if (e.lengthComputable) {
@@ -730,8 +731,9 @@
                             document.getElementById('video-input').value = '';
                             document.getElementById('caption-input').value = '';
                             document.getElementById('file-label').innerHTML = '📁 Select Video (Max 25 MB)';
-                            document.getElementById('progress-bar').style.width = '0%';
-                            document.getElementById('progress-bar').innerText = '0%';
+                            progressBar.style.width = '0%';
+                            progressBar.innerText = '0%';
+                            
                             await loadVideos();
                             showFeed();
                         }
@@ -739,7 +741,7 @@
                         throw new Error('Server upload failed with status ' + xhr.status);
                     }
                 } catch (err) {
-                    alert('Error: ' + err.message);
+                    alert('Upload Error: ' + err.message + '. Render server might be waking up, please try uploading again in 10 seconds.');
                     postBtn.disabled = false;
                     postBtn.innerText = 'Post';
                     progressContainer.style.display = 'none';
@@ -747,7 +749,14 @@
             };
 
             xhr.onerror = function() {
-                alert('Network error during upload!');
+                alert('Network error! Please check your internet connection or try again.');
+                postBtn.disabled = false;
+                postBtn.innerText = 'Post';
+                progressContainer.style.display = 'none';
+            };
+
+            xhr.ontimeout = function () {
+                alert('Upload timed out! The server took too long to respond. Please try again.');
                 postBtn.disabled = false;
                 postBtn.innerText = 'Post';
                 progressContainer.style.display = 'none';
