@@ -213,6 +213,19 @@
         </div>
     </div>
 
+    <!-- Followers List Modal -->
+    <div id="followers-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 130; align-items: flex-end;">
+        <div class="comment-content">
+            <div class="comment-header">
+                My Followers <span id="followers-count-title">(0)</span>
+                <button class="comment-close" onclick="closeFollowersModal()">✕</button>
+            </div>
+            <div class="comment-list" id="followers-list">
+                <div class="loader">Loading followers...</div>
+            </div>
+        </div>
+    </div>
+
     <!-- Upload Modal -->
     <div id="upload-modal">
         <div class="modal-content">
@@ -631,6 +644,39 @@
             }
         }
 
+        async function openFollowersModal() {
+            document.getElementById('followers-modal').style.display = 'flex';
+            document.getElementById('followers-list').innerHTML = `<div class="loader">Loading followers...</div>`;
+
+            // ফলার্স লিস্ট ফেচ করা (যারা currentUser.id কে ফলো করেছে)
+            const { data, error } = await sbClient.from('follows').select('*').eq('following_id', currentUser.id);
+
+            if (error || !data || data.length === 0) {
+                document.getElementById('followers-list').innerHTML = `<div style="text-align:center; color:#888; margin-top:30px;">No followers yet.</div>`;
+                document.getElementById('followers-count-title').innerText = '(0)';
+                return;
+            }
+
+            document.getElementById('followers-count-title').innerText = `(${data.length})`;
+
+            document.getElementById('followers-list').innerHTML = data.map(f => {
+                const followerName = f.follower_name || 'User ' + f.follower_id.substring(0, 5);
+                const initial = followerName[0].toUpperCase();
+                return `
+                <div class="comment-item" style="align-items: center;">
+                    <div class="comment-avatar">${initial}</div>
+                    <div class="comment-body" style="background:transparent; padding:0;">
+                        <div class="comment-user" style="font-size:14px; color:var(--text-color);">${escapeHtml(followerName)}</div>
+                        <div class="comment-text" style="font-size:11px; color:var(--subtext-color);">Followed you</div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function closeFollowersModal() {
+            document.getElementById('followers-modal').style.display = 'none';
+        }
+
         function shareVideo(videoId) {
             const botUsername = "Videohub7bot"; 
             const miniAppShareUrl = `https://t.me/${botUsername}/app?startapp=video_${videoId}`;
@@ -656,7 +702,7 @@
             }
         }
 
-        // ✅ স্মার্ট স্মার্ট কাউন্টডাউন ও অটো-স্টার্ট আপলোড ফাংশন
+        // ✅ স্মার্ট কাউন্টডাউন ও অটো-স্টার্ট আপলোড (নেটওয়ার্ক এরর ফিক্সড)
         function uploadVideo() {
             if (currentUser.isGuest) {
                 alert('Access Denied! You must open this app inside Telegram with a valid account to upload videos.');
@@ -680,14 +726,13 @@
             const progressBar = document.getElementById('progress-bar');
             progressContainer.style.display = 'block';
             
-            let countdown = 60; // ১ মিনিটের ম্যাক্স কাউন্টডাউন
+            let countdown = 60;
             postBtn.innerText = `Waking Server (${countdown}s)...`;
             progressBar.style.width = '100%';
             progressBar.innerText = `Server is waking up... Please wait (${countdown}s)`;
 
             let isUploadingStarted = false;
 
-            // সার্ভার জেগে উঠেছে কি না তা চেক করার ফাংশন
             const checkServerInterval = setInterval(async () => {
                 try {
                     const res = await fetch(BACKEND_BASE_URL, { method: 'GET' });
@@ -695,15 +740,11 @@
                         isUploadingStarted = true;
                         clearInterval(countdownInterval);
                         clearInterval(checkServerInterval);
-                        // সার্ভার অন পাওয়া মাত্র টাইমার কেটে দিয়ে আপলোড শুরু হবে
                         startActualUpload(file, caption, postBtn, progressBar, progressContainer, fileInput);
                     }
-                } catch (e) {
-                    // সার্ভার এখনও না জাগলে ইগনোর করবে এবং কাউন্টডাউন চলতে থাকবে
-                }
-            }, 3000); // প্রতি ৩ সেকেন্ড পরপর সার্ভার চেক করবে
+                } catch (e) {}
+            }, 3000);
 
-            // ভিজ্যুয়াল কাউন্টডাউন টাইমার
             const countdownInterval = setInterval(() => {
                 countdown--;
                 if (countdown > 0 && !isUploadingStarted) {
@@ -713,97 +754,103 @@
                     isUploadingStarted = true;
                     clearInterval(countdownInterval);
                     clearInterval(checkServerInterval);
-                    // সময় শেষ হয়ে গেলেও আপলোড শুরু করে দেব
                     startActualUpload(file, caption, postBtn, progressBar, progressContainer, fileInput);
                 }
             }, 1000);
         }
 
         function startActualUpload(file, caption, postBtn, progressBar, progressContainer, fileInput) {
-            postBtn.innerText = 'Uploading Video...';
-            progressBar.style.width = '0%';
-            progressBar.innerText = '0%';
+            postBtn.innerText = 'Server Woke Up. Starting...';
+            progressBar.style.width = '100%';
+            progressBar.innerText = 'Connecting to storage...';
 
-            const formData = new FormData();
-            formData.append('video', file);
+            setTimeout(() => {
+                postBtn.innerText = 'Uploading Video...';
+                progressBar.style.width = '0%';
+                progressBar.innerText = '0%';
 
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', BACKEND_UPLOAD_URL, true);
-            xhr.timeout = 180000; // ৩ মিনিট টাইমআউট
+                const formData = new FormData();
+                formData.append('video', file);
+                formData.append('user_name', currentUser.name);
 
-            xhr.upload.onprogress = function(e) {
-                if (e.lengthComputable) {
-                    const percentComplete = Math.round((e.loaded / e.total) * 100);
-                    progressBar.style.width = percentComplete + '%';
-                    progressBar.innerText = percentComplete + '% (' + (e.loaded / (1024*1024)).toFixed(1) + ' MB / ' + (e.total / (1024*1024)).toFixed(1) + ' MB)';
-                }
-            };
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', BACKEND_UPLOAD_URL, true);
+                xhr.timeout = 300000;
 
-            xhr.onload = async function() {
-                try {
-                    if (xhr.status === 200) {
-                        const result = JSON.parse(xhr.responseText);
-                        if (!result.success) {
-                            throw new Error(result.error || 'Upload failed');
+                xhr.upload.onprogress = function(e) {
+                    if (e.lengthComputable) {
+                        const percentComplete = Math.round((e.loaded / e.total) * 100);
+                        progressBar.style.width = percentComplete + '%';
+                        progressBar.innerText = percentComplete + '% (' + (e.loaded / (1024*1024)).toFixed(1) + ' MB / ' + (e.total / (1024*1024)).toFixed(1) + ' MB)';
+                    }
+                };
+
+                xhr.onload = async function() {
+                    try {
+                        if (xhr.status === 200) {
+                            const result = JSON.parse(xhr.responseText);
+                            if (!result.success) {
+                                throw new Error(result.error || 'Upload failed');
+                            }
+
+                            const videoUrl = result.videoUrl;
+                            progressBar.innerText = 'Saving to Database...';
+
+                            const { error: dbError } = await sbClient.from('videos').insert({
+                                user_id: currentUser.id,
+                                user_name: currentUser.name,
+                                username: currentUser.username,
+                                caption: caption,
+                                video_url: videoUrl,
+                                likes_count: 0,
+                                views_count: 0
+                            });
+
+                            postBtn.disabled = false;
+                            postBtn.innerText = 'Post';
+                            progressContainer.style.display = 'none';
+
+                            if (dbError) {
+                                alert('Database save failed: ' + dbError.message);
+                            } else {
+                                closeUploadModal();
+                                fileInput.value = '';
+                                document.getElementById('video-input').value = '';
+                                document.getElementById('caption-input').value = '';
+                                document.getElementById('file-label').innerHTML = '📁 Select Video (Max 25 MB)';
+                                progressBar.style.width = '0%';
+                                progressBar.innerText = '0%';
+                                
+                                await loadVideos();
+                                showFeed();
+                            }
+                        } else {
+                            throw new Error('Server upload failed with status ' + xhr.status);
                         }
-
-                        const videoUrl = result.videoUrl;
-                        progressBar.innerText = 'Saving to Database...';
-
-                        const { error: dbError } = await sbClient.from('videos').insert({
-                            user_id: currentUser.id,
-                            user_name: currentUser.name,
-                            username: currentUser.username,
-                            caption: caption,
-                            video_url: videoUrl,
-                            likes_count: 0,
-                            views_count: 0
-                        });
-
+                    } catch (err) {
+                        alert('Upload Error: ' + err.message);
                         postBtn.disabled = false;
                         postBtn.innerText = 'Post';
                         progressContainer.style.display = 'none';
-
-                        if (dbError) {
-                            alert('Database save failed: ' + dbError.message);
-                        } else {
-                            closeUploadModal();
-                            fileInput.value = '';
-                            document.getElementById('video-input').value = '';
-                            document.getElementById('caption-input').value = '';
-                            document.getElementById('file-label').innerHTML = '📁 Select Video (Max 25 MB)';
-                            progressBar.style.width = '0%';
-                            progressBar.innerText = '0%';
-                            
-                            await loadVideos();
-                            showFeed();
-                        }
-                    } else {
-                        throw new Error('Server upload failed with status ' + xhr.status);
                     }
-                } catch (err) {
-                    alert('Upload Error: ' + err.message);
+                };
+
+                xhr.onerror = function() {
+                    alert('Network error! The Render server dropped the connection. Please try uploading again.');
                     postBtn.disabled = false;
                     postBtn.innerText = 'Post';
                     progressContainer.style.display = 'none';
-                }
-            };
+                };
 
-            xhr.onerror = function() {
-                alert('Network error! Please check your internet connection or try again.');
-                postBtn.disabled = false;
-                postBtn.innerText = 'Post';
-                progressContainer.style.display = 'none';
-            };
+                xhr.ontimeout = function () {
+                    alert('Upload timed out! The server took too long to respond.');
+                    postBtn.disabled = false;
+                    postBtn.innerText = 'Post';
+                    progressContainer.style.display = 'none';
+                };
 
-            xhr.ontimeout = function () {
-                alert('Upload timed out! The server took too long to respond.');
-                postBtn.disabled = false;
-                postBtn.innerText = 'Post';
-                progressContainer.style.display = 'none';
-            };
-
-            xhr.send(formData);
+                xhr.send(formData);
+            }, 3000);
         }
 
         function openMyProfile() {
@@ -845,7 +892,10 @@
 
                     <div class="profile-stats">
                         <div class="stat-box"><span>${userVideos.length}</span><small>Videos</small></div>
-                        <div class="stat-box"><span>${followersCount}</span><small>Followers</small></div>
+                        <div class="stat-box" ${isSelf ? `onclick="openFollowersModal()" style="cursor:pointer;" title="Click to view followers"` : ''}>
+                            <span style="${isSelf ? 'color:#2b82ff; text-decoration:underline;' : ''}">${followersCount}</span>
+                            <small>${isSelf ? 'View Followers 🔍' : 'Followers'}</small>
+                        </div>
                         <div class="stat-box"><span>${totalLikes}</span><small>Likes</small></div>
                         <div class="stat-box"><span>${totalViews}</span><small>Views</small></div>
                     </div>
