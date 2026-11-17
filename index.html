@@ -251,6 +251,7 @@
         const SUPABASE_URL = 'https://rkkuzkwfderknxpenyni.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_lZdvaKrvEi-7hzixWrOCzA_FoJxJ56b';
         const BACKEND_UPLOAD_URL = 'https://video-backend-7mbc.onrender.com/upload';
+        const BACKEND_BASE_URL = 'https://video-backend-7mbc.onrender.com/';
         
         const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -655,7 +656,7 @@
             }
         }
 
-        // ✅ ওয়ান-কল আপলোড ফাংশন (কোনো রিট্রাই বা লুপ ছাড়াই সরাসরি আপলোড)
+        // ✅ স্মার্ট স্মার্ট কাউন্টডাউন ও অটো-স্টার্ট আপলোড ফাংশন
         function uploadVideo() {
             if (currentUser.isGuest) {
                 alert('Access Denied! You must open this app inside Telegram with a valid account to upload videos.');
@@ -674,11 +675,52 @@
             const file = fileInput.files[0];
 
             postBtn.disabled = true;
-            postBtn.innerText = 'Uploading...';
             
             const progressContainer = document.getElementById('progress-container');
             const progressBar = document.getElementById('progress-bar');
             progressContainer.style.display = 'block';
+            
+            let countdown = 60; // ১ মিনিটের ম্যাক্স কাউন্টডাউন
+            postBtn.innerText = `Waking Server (${countdown}s)...`;
+            progressBar.style.width = '100%';
+            progressBar.innerText = `Server is waking up... Please wait (${countdown}s)`;
+
+            let isUploadingStarted = false;
+
+            // সার্ভার জেগে উঠেছে কি না তা চেক করার ফাংশন
+            const checkServerInterval = setInterval(async () => {
+                try {
+                    const res = await fetch(BACKEND_BASE_URL, { method: 'GET' });
+                    if (res.ok && !isUploadingStarted) {
+                        isUploadingStarted = true;
+                        clearInterval(countdownInterval);
+                        clearInterval(checkServerInterval);
+                        // সার্ভার অন পাওয়া মাত্র টাইমার কেটে দিয়ে আপলোড শুরু হবে
+                        startActualUpload(file, caption, postBtn, progressBar, progressContainer, fileInput);
+                    }
+                } catch (e) {
+                    // সার্ভার এখনও না জাগলে ইগনোর করবে এবং কাউন্টডাউন চলতে থাকবে
+                }
+            }, 3000); // প্রতি ৩ সেকেন্ড পরপর সার্ভার চেক করবে
+
+            // ভিজ্যুয়াল কাউন্টডাউন টাইমার
+            const countdownInterval = setInterval(() => {
+                countdown--;
+                if (countdown > 0 && !isUploadingStarted) {
+                    postBtn.innerText = `Waking Server (${countdown}s)...`;
+                    progressBar.innerText = `Server is waking up... Please wait (${countdown}s)`;
+                } else if (!isUploadingStarted) {
+                    isUploadingStarted = true;
+                    clearInterval(countdownInterval);
+                    clearInterval(checkServerInterval);
+                    // সময় শেষ হয়ে গেলেও আপলোড শুরু করে দেব
+                    startActualUpload(file, caption, postBtn, progressBar, progressContainer, fileInput);
+                }
+            }, 1000);
+        }
+
+        function startActualUpload(file, caption, postBtn, progressBar, progressContainer, fileInput) {
+            postBtn.innerText = 'Uploading Video...';
             progressBar.style.width = '0%';
             progressBar.innerText = '0%';
 
