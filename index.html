@@ -32,16 +32,6 @@
 
         body { background: var(--bg-color); color: var(--text-color); overflow: hidden; height: 100vh; width: 100vw; }
         
-        /* Top Search & Tags Header */
-        .top-header { position: fixed; top: 0; left: 0; right: 0; z-index: 40; background: linear-gradient(rgba(0,0,0,0.8), transparent); padding: 10px 15px; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
-        .search-box { width: 100%; background: rgba(255,255,255,0.15); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; padding: 8px 15px; color: #fff; font-size: 14px; outline: none; pointer-events: auto; }
-        .search-box::placeholder { color: #ccc; }
-        
-        .tags-container { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; pointer-events: auto; }
-        .tags-container::-webkit-scrollbar { display: none; }
-        .tag-pill { background: rgba(0,0,0,0.6); backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 15px; font-size: 12px; white-space: nowrap; cursor: pointer; }
-        .tag-pill.active { background: #2b82ff; border-color: #2b82ff; }
-
         #feed-view { height: calc(100vh - 60px); width: 100%; overflow-y: scroll; scroll-snap-type: y mandatory; scroll-behavior: smooth; }
         #feed-view::-webkit-scrollbar { display: none; }
         
@@ -53,7 +43,7 @@
         .play-pause-indicator.show { opacity: 1; }
 
         /* Top Mute / Unmute Button */
-        .top-mute-btn { position: absolute; top: 60px; right: 15px; background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; width: 40px; height: 40px; border-radius: 50%; font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 20; backdrop-filter: blur(5px); }
+        .top-mute-btn { position: absolute; top: 15px; right: 15px; background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; width: 40px; height: 40px; border-radius: 50%; font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 20; backdrop-filter: blur(5px); }
 
         .video-overlay { position: absolute; bottom: 0; left: 0; right: 0; padding: 20px 15px; background: linear-gradient(transparent, rgba(0,0,0,0.85)); display: flex; justify-content: space-between; align-items: flex-end; pointer-events: none; z-index: 5; }
         .user-info { pointer-events: auto; max-width: 70%; }
@@ -131,9 +121,6 @@
         .comment-input { flex: 1; background: var(--border-color); border: none; border-radius: 20px; padding: 10px 15px; color: var(--text-color); font-size: 14px; outline: none; }
         .comment-send-btn { background: #2b82ff; color: #fff; border: none; border-radius: 50%; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-weight: bold; }
 
-        /* Followers Modal */
-        #followers-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 130; align-items: flex-end; }
-
         /* Upload Modal */
         #upload-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; align-items: flex-end; }
         .modal-content { background: var(--modal-bg); width: 100%; border-radius: 20px 20px 0 0; padding: 24px; }
@@ -159,18 +146,6 @@
     </style>
 </head>
 <body>
-
-    <!-- Top Search and Custom Tags Header -->
-    <div class="top-header" id="top-header-bar">
-        <input type="text" id="search-input" class="search-box" placeholder="🔍 Search videos or creators..." oninput="filterVideos()" onkeydown="handleSearchKey(event)">
-        <div class="tags-container" id="tags-container">
-            <span class="tag-pill active" onclick="filterByTag('All', this)">#All</span>
-            <span class="tag-pill" onclick="filterByTag('New', this)">#New</span>
-            <span class="tag-pill" onclick="filterByTag('Trending', this)">#Trending</span>
-            <span class="tag-pill" onclick="filterByTag('Bangla', this)">#Bangla</span>
-            <span class="tag-pill" onclick="filterByTag('Indian', this)">#Indian</span>
-        </div>
-    </div>
 
     <!-- Main Video Feed -->
     <div id="feed-view">
@@ -216,7 +191,7 @@
 
             <div class="settings-item">
                 <span>ℹ️ App Version</span>
-                <span style="color:var(--subtext-color); font-size:13px;">v1.2.7 Pro</span>
+                <span style="color:var(--subtext-color); font-size:13px;">v1.2.5 Pro</span>
             </div>
         </div>
     </div>
@@ -265,7 +240,7 @@
             </label>
             <input type="file" id="video-input" accept="video/mp4,video/webm,video/quicktime" style="display:none;" onchange="handleFileSelect(event)">
             
-            <textarea id="caption-input" placeholder="Write a caption... (e.g. #Bangla #New song)"></textarea>
+            <textarea id="caption-input" placeholder="Write a caption..."></textarea>
             
             <div class="progress-container" id="progress-container">
                 <div class="progress-bar" id="progress-bar">0%</div>
@@ -314,7 +289,6 @@
         };
 
         let allVideos = [];
-        let currentSelectedTag = 'All';
         let userLikedVideoIds = new Set();
         let userFollowingSet = new Set();
         let viewedSessionSet = new Set();
@@ -355,7 +329,7 @@
                 return;
             }
 
-            filterVideos();
+            renderFeed(allVideos);
             
             const startParam = tg?.initDataUnsafe?.start_param;
             if (startParam && startParam.startsWith('video_')) {
@@ -373,43 +347,8 @@
             }
         }
 
-        function filterByTag(tag, element) {
-            currentSelectedTag = tag;
-            document.querySelectorAll('.tag-pill').forEach(p => p.classList.remove('active'));
-            element.classList.add('active');
-            filterVideos();
-        }
-
-        function filterVideos() {
-            const searchQuery = document.getElementById('search-input').value.toLowerCase().trim();
-            
-            let filtered = allVideos.filter(v => {
-                const caption = (v.caption || '').toLowerCase();
-                const author = (v.user_name || '').toLowerCase();
-                
-                const matchesSearch = caption.includes(searchQuery) || author.includes(searchQuery);
-                const matchesTag = (currentSelectedTag === 'All') || caption.includes(`#${currentSelectedTag.toLowerCase()}`);
-                
-                return matchesSearch && matchesTag;
-            });
-
-            renderFeed(filtered);
-        }
-
-        // এন্টার প্রেস করলে কিবোর্ড হাইড করার ফাংশন
-        function handleSearchKey(event) {
-            if (event.key === 'Enter') {
-                event.target.blur(); // কিবোর্ড হাইড করে দেবে
-            }
-        }
-
         function renderFeed(videos) {
             const feedEl = document.getElementById('feed-view');
-            if (videos.length === 0) {
-                feedEl.innerHTML = `<div class="loader">No matching videos found!</div>`;
-                return;
-            }
-
             feedEl.innerHTML = videos.map(v => {
                 const isLiked = userLikedVideoIds.has(v.id);
                 const isFollowing = userFollowingSet.has(v.user_id);
@@ -709,6 +648,7 @@
             document.getElementById('followers-modal').style.display = 'flex';
             document.getElementById('followers-list').innerHTML = `<div class="loader">Loading followers...</div>`;
 
+            // ফলার্স লিস্ট ফেচ করা (যারা currentUser.id কে ফলো করেছে)
             const { data, error } = await sbClient.from('follows').select('*').eq('following_id', currentUser.id);
 
             if (error || !data || data.length === 0) {
@@ -762,7 +702,7 @@
             }
         }
 
-        // Upload Video with Server Waking Counter & Fallback
+        // ✅ স্মার্ট কাউন্টডাউন ও অটো-স্টার্ট আপলোড (নেটওয়ার্ক এরর ফিক্সড)
         function uploadVideo() {
             if (currentUser.isGuest) {
                 alert('Access Denied! You must open this app inside Telegram with a valid account to upload videos.');
@@ -914,7 +854,6 @@
         }
 
         function openMyProfile() {
-            document.getElementById('top-header-bar').style.display = 'none';
             document.getElementById('nav-home').classList.remove('active');
             document.getElementById('nav-profile').classList.add('active');
             openUserProfile(currentUser.id, currentUser.name, currentUser.username, true);
@@ -994,7 +933,6 @@
         }
 
         function showFeed() {
-            document.getElementById('top-header-bar').style.display = 'flex';
             document.getElementById('profile-view').style.display = 'none';
             document.getElementById('feed-view').style.display = 'block';
             document.getElementById('nav-home').classList.add('active');
